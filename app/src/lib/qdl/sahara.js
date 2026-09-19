@@ -107,6 +107,33 @@ export class Sahara {
         logger.error("Device is in Sahara error state, please reboot the device.");
         return "error";
     }
+
+    /**
+     * QEFT patch：被吞 HELLO 的恢复（对齐 edl-ng 的 RecoverDiscardedQudHello）。
+     *
+     * 新型高通 USB 串口驱动（QDLoader/QUD）可能把最初的 Sahara HELLO 在到达应用
+     * 之前丢掉，设备从此停在 HELLO 状态等应答。edl-ng 的做法是：首次读超时后
+     * 「盲发」HELLO_RSP（不确认设备状态），若设备确实卡在 HELLO，它会回 CMD_READY。
+     * 恢复后通过 modeSwitch 让设备重发 HELLO，交给标准握手流程收尾。
+     */
+    async recoverDiscardedHello() {
+        logger.warn("Initial read timed out on serial; sending speculative HELLO_RSP (command mode).");
+        await this.cmdHello(sahara_mode_t.SAHARA_MODE_COMMAND);
+        const res = await this.getResponse();
+        if ("cmd" in res && res.cmd === cmd_t.SAHARA_CMD_READY) {
+            logger.debug("Speculative HELLO_RSP accepted (CMD_READY). Recovering...");
+            try {
+                this.serial = await this.cmdGetSerialNum();
+            }
+            catch {
+                // 序列号读取失败不阻塞恢复
+            }
+            await this.cmdModeSwitch(sahara_mode_t.SAHARA_MODE_COMMAND);
+            return true;
+        }
+        return false;
+    }
+
     async cmdHello(mode, version = 2, version_min = 1, max_cmd_len = 0) {
         const cmd = cmd_t.SAHARA_HELLO_RSP;
         const len = 0x30;

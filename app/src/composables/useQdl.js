@@ -175,11 +175,11 @@ export function useQdl() {
     try {
       const t = new WebUsbTransport()
       for (const d of await t.listDevices()) {
-        plan.push({ kind: 'usb', label: `WebUSB（已授权 ${d.name}）`, device: d.raw })
+        plan.push({ kind: 'webusb', label: `WebUSB（已授权 ${d.name}）`, device: d.raw })
       }
     } catch { /* ignore */ }
     if (state.env.serial) plan.push({ kind: 'serial', label: 'Web Serial（弹窗选择）' })
-    if (state.env.webusb) plan.push({ kind: 'usb', label: 'WebUSB（弹窗选择）' })
+    if (state.env.webusb) plan.push({ kind: 'webusb', label: 'WebUSB（弹窗选择）' })
     return plan
   }
 
@@ -246,12 +246,12 @@ export function useQdl() {
       state.status = `连接中（${step.label}）…`
       setProgress((i / plan.length) * 80, `尝试 ${step.label}`)
       try {
-        transport = createTransport(step.kind === 'usb-prompt' || step.kind === 'serial-prompt' ? step.kind.replace('-prompt', '') : step.kind)
+        transport = createTransport(step.kind)
         if (step.kind === 'sim') transport.armImageTransfer(state.programmer.buffer.byteLength)
         await openTransport(step.kind, step)
         log(`通道就绪：${step.label}`)
         await qdlHandshake()
-        state.transport = step.kind.replace('-prompt', '')
+        state.transport = step.kind
         state.status = '已连接'
         setProgress(100, '已连接')
         state.deviceInfo = transport.device ? { vid: transport.device.vendorId, pid: transport.device.productId } : null

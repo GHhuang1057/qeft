@@ -43,6 +43,17 @@ export class qdlDevice {
         logger.debug("QDL device detected");
         this.sahara = new Sahara(cdc, this.programmer);
         this.mode = await this.sahara.connect();
+        // ---- QEFT patch -----------------------------------------------------
+        // 串口上 QDLoader 驱动可能吞掉最初的 HELLO（设备停在 HELLO 状态），
+        // sahara.connect() 因此判定 error。参照 edl-ng 的 RecoverDiscardedQudHello：
+        // 盲发 HELLO_RSP(command) 恢复，成功后走标准 uploadLoader。
+        if (this.mode === "error" && cdc?.kind === "serial") {
+            if (await this.sahara.recoverDiscardedHello()) {
+                logger.debug("Recovered from discarded HELLO; uploading loader");
+                this.mode = await this.sahara.uploadLoader();
+            }
+        }
+        // ---- QEFT patch end --------------------------------------------------
         if (this.mode === "sahara") {
             logger.debug("Connected to Sahara");
             this.mode = await this.sahara.uploadLoader();
