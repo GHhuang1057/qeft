@@ -76,7 +76,15 @@ export class WebUsbTransport extends usbClass {
       await device.claimInterface(0)
     } catch (error) {
       try { await device.close() } catch { /* ignore */ }
-      throw new Error('打开 USB 设备失败（驱动未绑定为 WinUSB/libusbK？）', { cause: error })
+      // ---- QEFT patch：细化失败原因，便于用户自查 ----
+      const msg = String(error?.message || error)
+      if (/not accessible|SecurityError/i.test(msg)) {
+        throw new Error('设备被系统类驱动（QDLoader 串口驱动）占用，WebUSB 无法打开。请用 Zadig 重装 WinUSB（「驱动与帮助」页有向导），装完后重启浏览器再连。')
+      }
+      if (/NotFound/i.test(msg)) {
+        throw new Error('设备接口打开失败：上一次会话可能仍占用接口。请完全退出浏览器后重开再试。')
+      }
+      throw new Error(`打开 USB 设备失败（${msg}）。常见原因：1) 驱动被换回 QDLoader 串口 → 用 Zadig 重装 WinUSB；2) 旧会话未释放 → 重启浏览器；3) 设备已离开 9008 → 重进 EDL`, { cause: error })
     }
   }
 
