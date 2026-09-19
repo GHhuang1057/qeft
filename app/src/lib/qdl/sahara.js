@@ -153,10 +153,21 @@ export class Sahara {
      */
     async getResponse() {
         try {
-            const data = await this.cdc.read();
+            // ---- QEFT patch -------------------------------------------------
+            // 某些串口驱动会送出 0 长度读结果（断点/错误恢复等），原实现把空读
+            // 直接当超时返回 {}，上层秒判失败。这里对空读做有限重试（3 次 ×
+            // 短间隔），期间若出现异常则照旧上抛。
+            let data = new Uint8Array();
+            for (let attempt = 0; attempt < 3; attempt++) {
+                data = await this.cdc.read();
+                if (data.length > 0)
+                    break;
+                await new Promise((resolve) => setTimeout(resolve, 60));
+            }
             if (data.length === 0) {
                 return {};
             }
+            // ---- QEFT patch end ---------------------------------------------
             const dataText = new TextDecoder("utf-8").decode(data);
             if (dataText.includes("<?xml")) {
                 return { "firehose": "yes" };

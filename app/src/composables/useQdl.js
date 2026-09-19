@@ -260,7 +260,17 @@ export function useQdl() {
         return true
       } catch (e) {
         lastErr = e
-        log(`[${step.label}] 失败: ${String(e.message || e).slice(0, 180)}`, 'warn')
+        const msg = String(e.message || e)
+        log(`[${step.label}] 失败: ${msg.slice(0, 180)}`, 'warn')
+        // 浏览器一次用户手势只允许弹一个授权框；手势耗尽后继续跑只会报错，
+        // 直接终止本轮并提示用户再点一次连接
+        if (/user gesture/i.test(msg)) {
+          state.lastError = '授权弹窗未完成：请再点一次「连接设备」，在弹窗中选中设备后确认'
+          log(state.lastError, 'warn')
+          state.status = '等待再次点击连接'
+          busy.value = false
+          return false
+        }
         try { await transport?.close?.() } catch { /* ignore */ }
         transport = null
         // 桥接不可达时本会话内跳过，避免反复撞同一堵墙
