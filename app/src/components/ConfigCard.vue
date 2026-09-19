@@ -1,6 +1,6 @@
 <template>
   <section class="qeft-toolbar">
-    <!-- 第一行：设备 / 引导 / 配置 + 端口 -->
+    <!-- 第一行：设备 / 引导 / 配置 -->
     <div class="qeft-toolbar__row">
       <button class="gh-btn" :aria-expanded="open" @click="open = !open">
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
@@ -16,32 +16,6 @@
         <span v-if="q.state.connected" class="gh-badge gh-badge--success">已连接</span>
         <span v-else class="gh-badge gh-badge--neutral">未连接</span>
       </span>
-
-      <div class="gh-toolbar__spacer"></div>
-
-      <template v-if="advanced">
-        <span class="qeft-toolbar__label">端口:</span>
-        <label class="gh-check">
-          <input v-model="portMode" type="radio" value="auto" name="qeft-port" />
-          <span>自动</span>
-        </label>
-        <label class="gh-check">
-          <input v-model="portMode" type="radio" value="manual" name="qeft-port" />
-          <span>指定</span>
-        </label>
-        <select
-          v-model.number="portIndex"
-          class="gh-select qeft-toolbar__port"
-          :disabled="portMode !== 'manual' || !devices.length"
-        >
-          <option v-if="!devices.length" :value="-1">{{ portMode === 'manual' ? '（无设备，点刷新）' : '（自动）' }}</option>
-          <option v-else-if="portMode === 'auto'" :value="-1">（自动 · 第一台）</option>
-          <option v-for="(d, i) in devices" :key="d.serial || i" :value="i">
-            {{ d.name }} [{{ d.serial || '无序列号' }}]
-          </option>
-        </select>
-        <button class="gh-btn gh-btn--sm" :disabled="q.busy" @click="refreshDevices">刷新</button>
-      </template>
     </div>
 
     <!-- 连接参数（引导镜像 + Firehose 配置 + 连接按钮） -->
@@ -92,10 +66,10 @@
           用示例镜像（模拟模式）
         </button>
         <button class="gh-btn gh-btn--link gh-btn--sm" :aria-expanded="advanced" @click="advanced = !advanced">
-          {{ advanced ? '收起高级选项' : '高级：手动指定通道 / 端口' }}
+          {{ advanced ? '收起高级选项' : '高级选项' }}
         </button>
         <span class="qeft-muted">
-          默认自动探测通道（扩展 libusb → 已授权端口/设备 → 弹窗授权），无需关心驱动形态。
+          连接走 WebUSB（WinUSB 驱动）。提示：进 EDL 后 20 秒内完成连接，避免设备看门狗重启。
         </span>
       </div>
 
@@ -112,9 +86,9 @@
       </div>
     </div>
 
-    <!-- 高级：手动通道 -->
+    <!-- 高级 -->
     <div v-show="advanced" class="qeft-toolbar__body" style="margin-top: var(--gh-s3)">
-      <span class="gh-label">手动指定传输通道（自动失败时再动）</span>
+      <span class="gh-label">传输通道（一般保持自动）</span>
       <div class="qeft-transport gh-mb4">
         <button
           v-for="t in transports"
@@ -129,22 +103,12 @@
           <span class="qeft-transport__hint">{{ t.hint }}</span>
         </button>
       </div>
-
-      <div v-if="q.state.transport === 'bridge' && !q.state.bridge.available" class="gh-alert gh-alert--warning">
-        <div class="gh-alert__body">
-          <div class="gh-alert__title">未检测到 QEFT 桥接扩展</div>
-          <div>
-            安装 <span class="qeft-kbd">QEFT Bridge</span> 扩展并运行 <span class="qeft-kbd">host/setup.mjs</span> 注册本机宿主。
-            <button type="button" class="gh-btn gh-btn--link gh-btn--sm" @click="q.detectBridge()">重新检测</button>
-          </div>
-        </div>
-      </div>
     </div>
   </section>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { TRANSPORTS, fmtBytes } from '../composables/useQdl.js'
 
 const props = defineProps({ q: { type: Object, required: true } })
@@ -159,15 +123,6 @@ const driverError = computed(() => {
 const open = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
 const advanced = ref(false)
 const transports = TRANSPORTS
-const portMode = ref('auto')
-const portIndex = ref(-1)
-const devices = ref([])
-
-watch(portMode, (m) => { if (m === 'manual') refreshDevices() })
-watch(portIndex, (i) => {
-  const d = devices.value[i]
-  props.q.state.portSerial = (portMode.value === 'manual' && d) ? d.serial : ''
-})
 
 const summaryTransport = computed(() => {
   const t = transports.find((x) => x.id === props.q.state.transport)
@@ -180,21 +135,11 @@ const summaryProgrammer = computed(() => {
 
 function transportAvailable(id) {
   if (id === 'webusb') return props.q.state.env.webusb
-  if (id === 'serial') return props.q.state.env.serial
   return true
 }
 
 function pickTransport(id) {
   props.q.state.transport = id
-  props.q.detectBridge()
-  devices.value = []
-  portIndex.value = -1
-}
-
-async function refreshDevices() {
-  devices.value = await props.q.listDevices()
-  if (portMode.value === 'manual' && devices.value.length && portIndex.value < 0) portIndex.value = 0
-  props.q.log(`端口枚举完成：${devices.value.length} 台（${props.q.state.transport}）`, 'debug')
 }
 
 async function onProg(e) {

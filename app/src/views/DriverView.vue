@@ -25,113 +25,12 @@
             </span>
             <span class="qeft-muted gh-ml2">已授权设备 {{ usbDevices }} 台</span>
           </dd>
-          <dt>桥接扩展</dt>
-          <dd>
-            <span class="gh-badge" :class="q.state.bridge.available ? 'gh-badge--success' : 'gh-badge--neutral'">
-              {{ q.state.bridge.available ? '已安装' : '未安装' }}
-            </span>
-            <span v-if="hostDevices >= 0" class="qeft-muted gh-ml2">宿主侧发现 {{ hostDevices }} 台 9008</span>
-          </dd>
         </dl>
 
         <div class="gh-alert gh-alert--info gh-mt4">
           <div class="gh-alert__body">
             <div class="gh-alert__title">结论</div>
             <div>{{ verdict }}</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 扩展安装向导 -->
-    <section class="gh-panel">
-      <div class="gh-panel__head">
-        <h3>QEFT Bridge 浏览器扩展</h3>
-        <div class="gh-panel__head-actions">
-          <span class="gh-badge" :class="q.state.bridge.available ? 'gh-badge--success' : 'gh-badge--neutral'">
-            {{ q.state.bridge.available ? `已检测到（${q.state.bridge.source}）` : '未检测到' }}
-          </span>
-        </div>
-      </div>
-      <div class="gh-panel__body gh-prose">
-        <div class="gh-alert gh-alert--info gh-mb4">
-          <div class="gh-alert__body">
-            <div class="gh-alert__title">为什么不能「网页点一下就装」？</div>
-            <div>
-              Chromium 出于安全禁止网页静默/拖拽安装扩展（非商店 CRX 双击或拖入会被直接拒绝），
-              这一步绕不过。官方留了三个口子：<b>应用商店</b>（需开发者账号发布）、
-              <b>开发者模式加载解压缩</b>（下面的手动步骤）、
-              <b>企业策略自托管</b>——第三种就是我们提供的一键脚本：跑一次，浏览器重启后自动装好并随
-              <span class="qeft-kbd">updates.xml</span> 自动更新，不需要开发者模式。
-            </div>
-          </div>
-        </div>
-
-        <p class="qeft-mb3">
-          「扩展 · 本机 libusb」通道 = 本扩展（浏览器内转发）+ 本机宿主（node-usb/libusb）。两者都装好后刷新本页。
-        </p>
-
-        <h4 class="gh-mb2">方式 A · 一键脚本（推荐）</h4>
-        <ol>
-          <li>
-            下载脚本（可先用记事本打开查看，只写一条注册表策略，无其它动作）：
-            <span class="qeft-row gh-mt2">
-              <a class="gh-btn gh-btn--primary gh-btn--sm" href="/extensions/install-extension.cmd" download>
-                下载 install-extension.cmd
-              </a>
-              <a class="gh-btn gh-btn--outline gh-btn--sm" href="/extensions/remove-extension.cmd" download>卸载脚本</a>
-              <a class="gh-btn gh-btn--outline gh-btn--sm" href="/extensions/qeft-bridge.crx" download>CRX 包（供策略安装）</a>
-            </span>
-          </li>
-          <li>
-            双击运行（若浏览器拦截下载，右键「保留」；或把下面命令粘贴到 PowerShell 执行）：
-            <pre class="gh-codeblock qeft-mt2">reg add "HKCU\Software\Policies\Google\Chrome\ExtensionInstallForcelist" /v 1 /d "bflfbjgpjlhhgajeimapcodifjhmaloo;https://flash.geekhonize.top/extensions/updates.xml" /f
-reg add "HKCU\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 1 /d "bflfbjgpjlhhgajeimapcodifjhmaloo;https://flash.geekhonize.top/extensions/updates.xml" /f</pre>
-          </li>
-          <li><b>完全退出浏览器再打开</b>，扩展自动出现（扩展页里标记「由管理员安装」，策略方式由 updates.xml 自动更新）。</li>
-          <li>继续装<b>本机宿主</b>（见下方第 5 步说明或扩展 README），然后回页「重新检测」。</li>
-        </ol>
-
-        <h4 class="gh-mb2 gh-mt4">方式 B · 手动加载解压缩（不想动注册表）</h4>
-        <ol>
-          <li>
-            下载扩展包并解压到固定目录（以后不要删）：
-            <span class="qeft-row gh-mt2">
-              <a class="gh-btn gh-btn--outline gh-btn--sm" href="/extensions/qeft-bridge-0.1.0.zip" download>
-                下载 qeft-bridge-0.1.0.zip
-              </a>
-            </span>
-          </li>
-          <li>
-            地址栏打开 <span class="qeft-kbd">chrome://extensions</span>（Edge：
-            <span class="qeft-kbd">edge://extensions</span>），开启右上角<b>「开发人员模式」</b>。
-          </li>
-          <li>点<b>「加载解压缩的扩展程序」</b>，选择解压出的 <span class="qeft-kbd">extension</span> 目录。</li>
-          <li>
-            核对扩展 ID 为
-            <span class="qeft-kbd">{{ extId }}</span>
-            （manifest 内置 key，ID 固定，与本机宿主清单 allowed_origins 一致）。
-          </li>
-        </ol>
-
-        <h4 class="gh-mb2 gh-mt4">两 种方式共同的后置步骤</h4>
-        <ol>
-          <li value="5">
-            <b>注册本机宿主</b>：在仓库 <span class="qeft-kbd">host/</span> 目录执行
-            <span class="qeft-kbd">node setup.mjs</span>（安装 node-usb/libusb、生成 Native Messaging 清单并写注册表），
-            再用 <span class="qeft-kbd">node test-host.mjs</span> 自检。
-          </li>
-          <li value="6">回到本页点右上角<b>「重新检测」</b>——桥接扩展变为「已检测到」即可使用。</li>
-        </ol>
-
-        <div class="gh-alert gh-alert--info gh-mt4">
-          <div class="gh-alert__body">
-            <div class="gh-alert__title">想真正「点一下就装」？</div>
-            <div>
-              只能走应用商店：Chrome Web Store（注册开发者 5 美元/次）或 Edge 加载项（免费），
-              发布后即可挂「添加至 Chrome」官方按钮。本页的扩展包
-              <span class="qeft-kbd">qeft-bridge-0.1.0.zip</span> 即商店可用的提交包。
-            </div>
           </div>
         </div>
       </div>
@@ -196,7 +95,7 @@ reg add "HKCU\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 1 /
 pnputil /delete-driver oemXX.inf /uninstall</pre>
               然后重进 EDL → 设备管理器里 9008 应无 COM 口 → 重启浏览器 → 连接。
               <b>代价</b>：QFIL 等串口工具不再可用（要用时重装 QDLoader 驱动即可）。
-              串口通道（Web Serial）只是备用路线：带宽低且驱动会吞 HELLO，稳定刷机请用 WinUSB。
+              串口（QDLoader）路线仅作备用，带宽低且驱动会吞 HELLO，稳定刷机请始终使用 WinUSB。
             </div>
           </div>
         </div>
@@ -214,13 +113,6 @@ pnputil /delete-driver oemXX.inf /uninstall</pre>
           <dd>换 libusbK 重装；或重启浏览器 / 拔插设备；确认没有其它程序（QFIL、刷机匣等）占用设备。</dd>
           <dt>WebUSB 弹不出选择框</dt>
           <dd>必须 HTTPS 或 localhost；且同源下先授权过。本页为 <span class="qeft-kbd">{{ origin }}</span>。</dd>
-          <dt>想用串口模式（推荐，免 Zadig）</dt>
-          <dd>
-            设备管理器里显示 <span class="qeft-kbd">Qualcomm HS-USB QDLoader 9008 (COMx)</span> 时，
-            <b>不需要装 WinUSB</b>——直接把传输通道切到 <b>Web Serial</b> 连接 COM 口即可（协议与 USB
-            相同，速率受串口限制）。这正是 edl-ng 在 Windows 上的 QUD 通道设计：驱动是什么就用什么，
-            不与系统驱动对抗。
-          </dd>
           <dt>Linux / macOS</dt>
           <dd>
             无需 Zadig。Linux 下若被 qcserial 内核驱动占用，unbind 后再连；
@@ -239,11 +131,9 @@ pnputil /delete-driver oemXX.inf /uninstall</pre>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { EXT_ID } from '../lib/bridge.js'
 
 const props = defineProps({ q: { type: Object, required: true } })
 
-const extId = EXT_ID
 
 const checking = ref(false)
 const usbOk = ref(false)
@@ -266,9 +156,9 @@ const verdict = computed(() => {
       ? '非 Windows 平台无需安装驱动，可直接尝试连接。'
       : '非 Windows 平台：请检查内核驱动占用（Linux 的 qcserial）后重试。'
   }
-  if (!secure.value) return '当前不是安全上下文，WebUSB 无法使用；请用 https 或 localhost，或安装 QEFT Bridge 扩展走本机 libusb。'
+  if (!secure.value) return '当前不是安全上下文，WebUSB 无法使用；请改用 https 或 localhost 打开。'
   if (usbDevices.value > 0) return '已有已授权的 9008 设备，可以直接到「深度刷机」页连接。'
-  if (!usbOk.value) return '当前浏览器不支持 WebUSB，请换 Chrome / Edge，或安装 QEFT Bridge 扩展。'
+  if (!usbOk.value) return '当前浏览器不支持 WebUSB，请换 Chrome / Edge。'
   if (hostDevices.value > 0) return '宿主侧已发现 9008 设备，但浏览器尚未授权：装好 WinUSB 驱动后用 WebUSB 授权一次即可。'
   return '未发现 9008 设备：先让设备进入 EDL，然后按下方向导安装 WinUSB 驱动。'
 })

@@ -7,9 +7,6 @@
 import { reactive, ref } from 'vue'
 import { qdlDevice } from '../lib/qdl/qdl.js'
 import { WebUsbTransport, webUsbSupported } from '../lib/transports/webusb.js'
-import { SerialTransport, webSerialSupported } from '../lib/transports/serial.js'
-import { BridgeTransport } from '../lib/transports/bridge.js'
-import { bridge, BridgeClient } from '../lib/bridge.js'
 import { SimUsb } from '../lib/sim/device-sim.js'
 import { installLateRebuffer } from '../lib/late-buffer.js'
 
@@ -18,8 +15,6 @@ installLateRebuffer()
 export const TRANSPORTS = [
   { id: 'auto', label: '自动（推荐）', hint: '按可用性自动选择通道，静默优先' },
   { id: 'webusb', label: 'WebUSB', hint: '浏览器直连，需 WinUSB 驱动' },
-  { id: 'bridge', label: '扩展 · 本机 libusb', hint: '经 QEFT 扩展调用系统 libusb' },
-  { id: 'serial', label: 'Web Serial', hint: '设备以 COM 口形式暴露时' },
   { id: 'sim', label: '模拟设备', hint: '无真机时验证流程 / 演示' },
 ]
 
@@ -51,14 +46,11 @@ export function useQdl() {
       zlpAwareHost: 1,
       skipWrite: 0,
     },
-    bridge: { available: false, source: null, extId: null, error: '' },
-    portSerial: '',
     lastError: '',
     env: {
       secure: typeof window !== 'undefined' ? !!window.isSecureContext : false,
       origin: typeof location !== 'undefined' ? location.origin : '',
       webusb: webUsbSupported(),
-      serial: webSerialSupported(),
     },
   })
 
@@ -94,19 +86,10 @@ export function useQdl() {
   }
 
   /* ---------------- 传输通道 ---------------- */
-  function detectBridge() {
-    const d = BridgeClient.detect()
-    state.bridge.available = d.available
-    state.bridge.source = d.source
-    state.bridge.extId = d.extId || null
-    return d
-  }
 
   function createTransport(kind = state.transport) {
     switch (kind) {
       case 'webusb': return new WebUsbTransport()
-      case 'bridge': return new BridgeTransport()
-      case 'serial': return new SerialTransport({ baudRate: 115200 })
       case 'sim': {
         const sim = new SimUsb({
           onLog: (l) => log(l, 'debug'),
@@ -119,19 +102,8 @@ export function useQdl() {
 
   async function listDevices() {
     try {
-      const t = createTransport(state.transport)
-      if (state.transport === 'bridge') {
-        await bridge().connect()
-        const r = await bridge().call('list')
-        return (r.devices || []).map((d) => ({
-          kind: 'bridge',
-          serial: d.serial || `${d.vid?.toString(16)}:${d.pid?.toString(16)}@${d.bus}/${d.address}`,
-          name: d.name || d.manufacturer || 'Qualcomm 9008',
-          vid: d.vid,
-          pid: d.pid,
-        }))
-      }
-      if (state.transport === 'webusb') return await t.listDevices()
+      const t = new WebUsbTransport()
+      if (state.transport === 'webusb' || state.transport === 'auto') return await t.listDevices()
       return []
     } catch (e) {
       log(`枚举设备失败: ${e.message || e}`, 'error')
@@ -162,32 +134,23 @@ export function useQdl() {
   /* ---------------- 连接（自动通道选择） ---------------- */
 
   /**
-   * 组装自动连接计划：静默通道优先，弹窗通道垫底。
-   * 哲学与 edl-ng 的 QUD/libusb 双通道一致：驱动是什么就走什么，不跟系统驱动对抗。
+   * 组装自动连接计划：已授权设备静默直连，其次弹一次授权框。
    */
   async function buildConnectPlan() {
     const plan = []
-    if (state.bridge.available) plan.push({ kind: 'bridge', label: '扩展 · 本机 libusb' })
-    try {
-      const ports = await SerialTransport.listKnownPorts()
-      ports.forEach((port, i) => plan.push({ kind: 'serial', label: `Web Serial（已授权端口 ${i + 1}）`, port }))
-    } catch { /* ignore */ }
     try {
       const t = new WebUsbTransport()
       for (const d of await t.listDevices()) {
         plan.push({ kind: 'webusb', label: `WebUSB（已授权 ${d.name}）`, device: d.raw })
       }
     } catch { /* ignore */ }
-    if (state.env.serial) plan.push({ kind: 'serial', label: 'Web Serial（弹窗选择）' })
     if (state.env.webusb) plan.push({ kind: 'webusb', label: 'WebUSB（弹窗选择）' })
     return plan
   }
 
   async function openTransport(kind, step = {}) {
-    if (kind === 'bridge') { await transport.connect(state.portSerial || null); return }
-    if (kind === 'usb' && step.device) { await transport.connectDevice(step.device); return }
-    if (kind === 'serial' && step.port) { await transport.connectPort(step.port); return }
-    await transport.connect(state.portSerial || null)
+    if (kind === 'webusb' && step.device) { await transport.connectDevice(step.device); return }
+    await transport.connect()
   }
 
   /** 传输层打通后的 qdl 握手 + Configure（与通道无关） */
@@ -273,8 +236,6 @@ export function useQdl() {
         }
         try { await transport?.close?.() } catch { /* ignore */ }
         transport = null
-        // 桥接不可达时本会话内跳过，避免反复撞同一堵墙
-        if (step.kind === 'bridge') state.bridge.available = false
         if (auto) {
           const rest = await buildConnectPlan()
           plan = plan.slice(0, i + 1).concat(rest.filter((r) => !plan.slice(0, i + 1).some((p) => p.label === r.label)))
@@ -656,7 +617,7 @@ export function useQdl() {
   return reactive({
     state, logs, busy, progress, luns, activeLun, exports,
     saveExport,
-    detectBridge, listDevices, setProgrammer, connect, disconnect,
+    listDevices, setProgrammer, connect, disconnect,
     scanPartitions, flashPartition, erasePartition, readPartition, flashRawProgram,
     eraseRows, eraseFactory, programRaw,
     getStorageInfo, getDeviceType, setActiveSlot, reset,

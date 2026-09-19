@@ -167,7 +167,6 @@ async function refresh() {
 }
 
 onMounted(() => {
-  q.detectBridge()
   syncHash(active.value)
   q.log('QEFT 已就绪，选择传输通道并加载 prog_firehose 后开始')
 })
