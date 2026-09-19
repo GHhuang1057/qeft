@@ -219,6 +219,8 @@ export function useQdl() {
         setProgress(100, '已连接')
         state.deviceInfo = transport.device ? { vid: transport.device.vendorId, pid: transport.device.productId } : null
         log(`Firehose 就绪 · LUN 列表 ${dev.firehose.luns.join(',')}`)
+        // 顺手读一次存储信息，侧栏设备卡直接展示型号
+        getStorageInfo().catch(() => {})
         busy.value = false
         return true
       } catch (e) {

@@ -1,30 +1,48 @@
 <template>
   <section class="qeft-toolbar">
-    <!-- 第一行：设备 / 引导 / 配置 -->
+    <!-- 主行：引导镜像 → 连接 -->
     <div class="qeft-toolbar__row">
-      <button class="gh-btn" :aria-expanded="open" @click="open = !open">
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <path d="M4 6h16M4 12h16M4 18h10" />
-        </svg>
-        选择设备 / 引导 / 配置
+      <span class="gh-label" style="margin: 0">引导镜像</span>
+      <input
+        class="gh-input qeft-progfile"
+        type="file"
+        accept=".mbn,.elf,.bin,.img"
+        :disabled="q.busy"
+        @change="onProg"
+      />
+      <button class="gh-btn gh-btn--primary" :aria-disabled="q.busy || !q.state.programmer" @click="onConnect">
+        <span v-if="q.busy" class="gh-spinner" aria-hidden="true"></span>
+        {{ q.state.connected ? '重新连接' : '连接设备' }}
       </button>
+      <button v-if="q.state.connected" class="gh-btn" :aria-disabled="q.busy" @click="q.disconnect()">断开</button>
+      <button class="gh-btn gh-btn--link gh-btn--sm" :aria-expanded="advanced" @click="advanced = !advanced">
+        {{ advanced ? '收起高级' : '高级' }}
+      </button>
+
+      <div class="gh-toolbar__spacer"></div>
+
       <span class="qeft-toolbar__summary">
-        已选择:
-        <b>{{ summaryTransport }}</b>
-        <span class="qeft-muted">·</span>
-        <b>{{ summaryProgrammer }}</b>
+        {{ q.state.transport === 'sim' ? '模拟设备' : 'WebUSB' }}
         <span v-if="q.state.connected" class="gh-badge gh-badge--success">已连接</span>
         <span v-else class="gh-badge gh-badge--neutral">未连接</span>
       </span>
     </div>
 
-    <!-- 连接参数（引导镜像 + Firehose 配置 + 连接按钮） -->
-    <div v-show="open" class="qeft-toolbar__body">
-      <div class="qeft-formgrid gh-mb4">
-        <div class="gh-field gh-mb0">
-          <span class="gh-label">引导镜像 <span class="gh-req">*</span></span>
-          <input class="gh-input" type="file" accept=".mbn,.elf,.bin,.img" :disabled="q.busy" @change="onProg" />
+    <!-- 连接失败提示 -->
+    <div v-if="q.state.lastError && !q.state.connected" class="gh-alert gh-alert--danger gh-mt3">
+      <div class="gh-alert__body">
+        <div class="gh-alert__title">连接失败</div>
+        <div class="qeft-row gh-mt2">
+          <span class="qeft-muted">{{ q.state.lastError }}</span>
+          <button class="gh-btn gh-btn--sm gh-btn--outline" @click="onConnect">重试连接</button>
+          <button v-if="driverError" class="gh-btn gh-btn--sm gh-btn--outline" @click="emit('need-driver')">驱动安装向导</button>
         </div>
+      </div>
+    </div>
+
+    <!-- 高级：Firehose 配置 + 通道 -->
+    <div v-show="advanced" class="qeft-toolbar__body" style="margin-top: var(--gh-s3)">
+      <div class="qeft-formgrid gh-mb4">
         <div class="gh-field gh-mb0">
           <label class="gh-label" for="cfg-mem">存储类型</label>
           <select id="cfg-mem" v-model="q.state.cfg.memoryName" class="gh-select" :disabled="q.busy">
@@ -52,64 +70,40 @@
         </div>
       </div>
 
-      <div class="qeft-row">
-        <button class="gh-btn gh-btn--primary" :aria-disabled="q.busy || !q.state.programmer" @click="onConnect">
-          <span v-if="q.busy" class="gh-spinner" aria-hidden="true"></span>
-          {{ q.state.connected ? '重新连接（上传引导）' : '连接设备' }}
-        </button>
-        <button class="gh-btn gh-btn--outline" :aria-disabled="!q.state.connected" @click="q.disconnect()">断开</button>
-        <button
-          v-if="q.state.transport === 'sim' && !q.state.programmer"
-          class="gh-btn gh-btn--outline gh-btn--sm"
-          @click="useSampleProgrammer"
-        >
-          用示例镜像（模拟模式）
-        </button>
-        <button class="gh-btn gh-btn--link gh-btn--sm" :aria-expanded="advanced" @click="advanced = !advanced">
-          {{ advanced ? '收起高级选项' : '高级选项' }}
-        </button>
-        <span class="qeft-muted">
-          连接走 WebUSB（WinUSB 驱动）。提示：进 EDL 后 20 秒内完成连接，避免设备看门狗重启。
-        </span>
-      </div>
-
-      <!-- 连接失败提示 -->
-      <div v-if="q.state.lastError && !q.state.connected" class="gh-alert gh-alert--danger gh-mt4">
-        <div class="gh-alert__body">
-          <div class="gh-alert__title">连接失败</div>
-          <div class="qeft-row gh-mt2">
-            <span class="qeft-muted">{{ q.state.lastError }}</span>
-            <button class="gh-btn gh-btn--sm gh-btn--outline" @click="onConnect">重试连接</button>
-            <button v-if="driverError" class="gh-btn gh-btn--sm gh-btn--outline" @click="emit('need-driver')">驱动安装向导</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 高级 -->
-    <div v-show="advanced" class="qeft-toolbar__body" style="margin-top: var(--gh-s3)">
-      <span class="gh-label">传输通道（一般保持自动）</span>
-      <div class="qeft-transport gh-mb4">
+      <div class="qeft-row gh-mb3">
+        <span class="gh-label" style="margin: 0">传输通道（一般保持自动）</span>
         <button
           v-for="t in transports"
           :key="t.id"
           type="button"
-          class="qeft-transport__item"
+          class="gh-btn gh-btn--sm"
+          :class="{ 'gh-btn--primary': q.state.transport === t.id }"
           :aria-pressed="q.state.transport === t.id"
           :disabled="!transportAvailable(t.id)"
           @click="pickTransport(t.id)"
         >
-          <span class="qeft-transport__label">{{ t.label }}</span>
-          <span class="qeft-transport__hint">{{ t.hint }}</span>
+          {{ t.label }}
+        </button>
+        <button
+          v-if="q.state.transport === 'sim' && !q.state.programmer"
+          class="gh-btn gh-btn--sm gh-btn--outline"
+          @click="useSampleProgrammer"
+        >
+          生成示例引导镜像
         </button>
       </div>
+
+      <p class="qeft-muted" style="margin: 0">
+        引导镜像即 <span class="qeft-kbd">prog_firehose_*.elf/.mbn</span>，须与设备 SoC 匹配。
+        连接走 WebUSB（WinUSB 驱动），进 EDL 后 20 秒内完成连接可避开设备看门狗。
+      </p>
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, ref } from 'vue'
-import { TRANSPORTS, fmtBytes } from '../composables/useQdl.js'
+import { TRANSPORTS } from '../composables/useQdl.js'
 
 const props = defineProps({ q: { type: Object, required: true } })
 const emit = defineEmits(['need-driver'])
@@ -119,19 +113,8 @@ const driverError = computed(() => {
   const msg = props.q.state.lastError || ''
   return !props.q.state.connected && /驱动|WinUSB|libusbK|claimInterface|USB 设备失败/i.test(msg)
 })
-// 窄屏默认折叠，先露出工作区；宽屏默认展开，方便首次配置
-const open = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
 const advanced = ref(false)
 const transports = TRANSPORTS
-
-const summaryTransport = computed(() => {
-  const t = transports.find((x) => x.id === props.q.state.transport)
-  return t ? t.label : '—'
-})
-const summaryProgrammer = computed(() => {
-  const p = props.q.state.programmer
-  return p ? `${p.name} · ${fmtBytes(p.size)}` : '未选择引导'
-})
 
 function transportAvailable(id) {
   if (id === 'webusb') return props.q.state.env.webusb

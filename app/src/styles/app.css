@@ -451,6 +451,68 @@ body {
 .qeft-mt2 { margin-top: var(--gh-s2); }
 .qeft-mt3 { margin-top: var(--gh-s3); }
 
+/* ---------- 「更多操作」下拉菜单 ---------- */
+.qeft-menu {
+  position: relative;
+}
+
+.qeft-menu > summary {
+  list-style: none;
+  user-select: none;
+}
+
+.qeft-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.qeft-menu__body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--gh-s1));
+  z-index: var(--gh-z-header, 100);
+  min-width: 240px;
+  padding: var(--gh-s2);
+  background: var(--gh-bg-elev);
+  border: 1px solid var(--gh-border);
+  border-radius: var(--gh-r-md);
+  box-shadow: var(--gh-shadow-16);
+  display: grid;
+  gap: 2px;
+}
+
+.qeft-menu__item {
+  display: block;
+  width: 100%;
+  padding: var(--gh-s2) var(--gh-s3);
+  font-family: inherit;
+  font-size: var(--gh-fs-14);
+  color: var(--gh-fg);
+  background: transparent;
+  border: 0;
+  border-radius: var(--gh-r-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.qeft-menu__item:hover {
+  background: var(--gh-bg-hover);
+}
+
+.qeft-menu__item[aria-disabled='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.qeft-menu__item--danger {
+  color: var(--gh-danger);
+}
+
+.qeft-menu__sep {
+  height: 1px;
+  background: var(--gh-border-subtle);
+  margin: var(--gh-s1) 0;
+}
+
 /* ---------- 窄屏 ---------- */
 /* 中等屏：收窄侧栏与操作栏 */
 @media (max-width: 1279px) {
