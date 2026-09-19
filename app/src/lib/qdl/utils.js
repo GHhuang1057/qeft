@@ -61,6 +61,12 @@ export function runWithTimeout(promise, timeout) {
             .then((val) => {
             if (!timedOut)
                 resolve(val);
+            // ---- QEFT patch -------------------------------------------------
+            // 超时后被遗弃的读 promise 迟到拿到的数据不能丢（QDLoader 吞掉首个
+            // HELLO 后设备重发的数据会落在这里），交回回收缓冲供下次读取消费。
+            else if (typeof globalThis.__qeftLateRebuffer === 'function')
+                globalThis.__qeftLateRebuffer(val);
+            // ---- QEFT patch end ---------------------------------------------
         })
             .catch((err) => {
             if (!timedOut)

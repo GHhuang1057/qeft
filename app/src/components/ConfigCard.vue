@@ -19,56 +19,33 @@
 
       <div class="gh-toolbar__spacer"></div>
 
-      <span class="qeft-toolbar__label">端口:</span>
-      <label class="gh-check">
-        <input v-model="portMode" type="radio" value="auto" name="qeft-port" />
-        <span>自动</span>
-      </label>
-      <label class="gh-check">
-        <input v-model="portMode" type="radio" value="manual" name="qeft-port" />
-        <span>指定</span>
-      </label>
-      <select
-        v-model.number="portIndex"
-        class="gh-select qeft-toolbar__port"
-        :disabled="portMode !== 'manual' || !devices.length"
-      >
-        <option v-if="!devices.length" :value="-1">{{ portMode === 'manual' ? '（无设备，点刷新）' : '（自动）' }}</option>
-        <option v-else-if="portMode === 'auto'" :value="-1">（自动 · 第一台）</option>
-        <option v-for="(d, i) in devices" :key="d.serial || i" :value="i">
-          {{ d.name }} [{{ d.serial || '无序列号' }}]
-        </option>
-      </select>
-      <button class="gh-btn gh-btn--sm" :disabled="q.busy" @click="refreshDevices">刷新</button>
+      <template v-if="advanced">
+        <span class="qeft-toolbar__label">端口:</span>
+        <label class="gh-check">
+          <input v-model="portMode" type="radio" value="auto" name="qeft-port" />
+          <span>自动</span>
+        </label>
+        <label class="gh-check">
+          <input v-model="portMode" type="radio" value="manual" name="qeft-port" />
+          <span>指定</span>
+        </label>
+        <select
+          v-model.number="portIndex"
+          class="gh-select qeft-toolbar__port"
+          :disabled="portMode !== 'manual' || !devices.length"
+        >
+          <option v-if="!devices.length" :value="-1">{{ portMode === 'manual' ? '（无设备，点刷新）' : '（自动）' }}</option>
+          <option v-else-if="portMode === 'auto'" :value="-1">（自动 · 第一台）</option>
+          <option v-for="(d, i) in devices" :key="d.serial || i" :value="i">
+            {{ d.name }} [{{ d.serial || '无序列号' }}]
+          </option>
+        </select>
+        <button class="gh-btn gh-btn--sm" :disabled="q.busy" @click="refreshDevices">刷新</button>
+      </template>
     </div>
 
-    <!-- 展开的配置区 -->
+    <!-- 连接参数（引导镜像 + Firehose 配置 + 连接按钮） -->
     <div v-show="open" class="qeft-toolbar__body">
-      <div class="qeft-transport gh-mb4">
-        <button
-          v-for="t in transports"
-          :key="t.id"
-          type="button"
-          class="qeft-transport__item"
-          :aria-pressed="q.state.transport === t.id"
-          :disabled="!transportAvailable(t.id)"
-          @click="pickTransport(t.id)"
-        >
-          <span class="qeft-transport__label">{{ t.label }}</span>
-          <span class="qeft-transport__hint">{{ t.hint }}</span>
-        </button>
-      </div>
-
-      <div v-if="q.state.transport === 'bridge' && !q.state.bridge.available" class="gh-alert gh-alert--warning gh-mb4">
-        <div class="gh-alert__body">
-          <div class="gh-alert__title">未检测到 QEFT 桥接扩展</div>
-          <div>
-            安装 <span class="qeft-kbd">QEFT Bridge</span> 扩展并运行 <span class="qeft-kbd">host/setup.mjs</span> 注册本机宿主。
-            <button type="button" class="gh-btn gh-btn--link gh-btn--sm" @click="q.detectBridge()">重新检测</button>
-          </div>
-        </div>
-      </div>
-
       <div class="qeft-formgrid gh-mb4">
         <div class="gh-field gh-mb0">
           <span class="gh-label">引导镜像 <span class="gh-req">*</span></span>
@@ -114,19 +91,51 @@
         >
           用示例镜像（模拟模式）
         </button>
+        <button class="gh-btn gh-btn--link gh-btn--sm" :aria-expanded="advanced" @click="advanced = !advanced">
+          {{ advanced ? '收起高级选项' : '高级：手动指定通道 / 端口' }}
+        </button>
         <span class="qeft-muted">
-          引导镜像即 <span class="qeft-kbd">prog_firehose_*.elf/.mbn</span>，须与设备 SoC 匹配，否则 Sahara 返回 NAK。
+          默认自动探测通道（扩展 libusb → 已授权端口/设备 → 弹窗授权），无需关心驱动形态。
         </span>
       </div>
 
-      <!-- 连接失败：识别为驱动问题时引导到驱动向导 -->
-      <div v-if="driverError" class="gh-alert gh-alert--danger gh-mt4">
+      <!-- 连接失败提示 -->
+      <div v-if="q.state.lastError && !q.state.connected" class="gh-alert gh-alert--danger gh-mt4">
         <div class="gh-alert__body">
-          <div class="gh-alert__title">需要安装 WinUSB / libusbK 驱动</div>
+          <div class="gh-alert__title">连接失败</div>
           <div class="qeft-row gh-mt2">
             <span class="qeft-muted">{{ q.state.lastError }}</span>
-            <button class="gh-btn gh-btn--sm gh-btn--outline" @click="emit('need-driver')">打开驱动安装向导</button>
-            <button class="gh-btn gh-btn--sm gh-btn--subtle" :disabled="q.busy" @click="onConnect">重试连接</button>
+            <button class="gh-btn gh-btn--sm gh-btn--outline" @click="onConnect">重试连接</button>
+            <button v-if="driverError" class="gh-btn gh-btn--sm gh-btn--outline" @click="emit('need-driver')">驱动安装向导</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 高级：手动通道 -->
+    <div v-show="advanced" class="qeft-toolbar__body" style="margin-top: var(--gh-s3)">
+      <span class="gh-label">手动指定传输通道（自动失败时再动）</span>
+      <div class="qeft-transport gh-mb4">
+        <button
+          v-for="t in transports"
+          :key="t.id"
+          type="button"
+          class="qeft-transport__item"
+          :aria-pressed="q.state.transport === t.id"
+          :disabled="!transportAvailable(t.id)"
+          @click="pickTransport(t.id)"
+        >
+          <span class="qeft-transport__label">{{ t.label }}</span>
+          <span class="qeft-transport__hint">{{ t.hint }}</span>
+        </button>
+      </div>
+
+      <div v-if="q.state.transport === 'bridge' && !q.state.bridge.available" class="gh-alert gh-alert--warning">
+        <div class="gh-alert__body">
+          <div class="gh-alert__title">未检测到 QEFT 桥接扩展</div>
+          <div>
+            安装 <span class="qeft-kbd">QEFT Bridge</span> 扩展并运行 <span class="qeft-kbd">host/setup.mjs</span> 注册本机宿主。
+            <button type="button" class="gh-btn gh-btn--link gh-btn--sm" @click="q.detectBridge()">重新检测</button>
           </div>
         </div>
       </div>
@@ -148,6 +157,7 @@ const driverError = computed(() => {
 })
 // 窄屏默认折叠，先露出工作区；宽屏默认展开，方便首次配置
 const open = ref(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true)
+const advanced = ref(false)
 const transports = TRANSPORTS
 const portMode = ref('auto')
 const portIndex = ref(-1)

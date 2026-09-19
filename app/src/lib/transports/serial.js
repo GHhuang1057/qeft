@@ -9,6 +9,8 @@ export function webSerialSupported() {
   return typeof navigator !== 'undefined' && 'serial' in navigator
 }
 
+import { takeLate } from '../late-buffer.js'
+
 function concat(a, b) {
   const c = new Uint8Array(a.length + b.length)
   c.set(a, 0)
@@ -28,6 +30,17 @@ export class SerialTransport {
     this.reader = null
     this.writer = null
     this._buf = new Uint8Array(0)
+    // qdl 的 runWithTimeout 超时后会「遗弃」读 promise，但底层 reader 的读并没有取消；
+    // 若此时再发起 read() 会形成并发读，Web Serial 会立刻拒绝（表现为瞬间超时）。
+    // 用内部队列把所有读操作串行化，遗弃的读最多多消费一次数据，不会报错。
+    this._readQueue = Promise.resolve()
+  }
+
+  /** 底层单次读（必须串行调用） */
+  async _rawRead() {
+    const { value, done } = await this.reader.read()
+    if (done) throw new Error('串口已关闭')
+    return value || new Uint8Array(0)
   }
 
   get connected() {
@@ -38,6 +51,12 @@ export class SerialTransport {
     if (!webSerialSupported()) throw new Error('当前浏览器不支持 Web Serial（需 Chrome / Edge 等 Chromium 内核）')
     const port = await navigator.serial.requestPort()
     await this.#open(port)
+  }
+
+  /** 已授权过的端口列表（无需用户手势） */
+  static async listKnownPorts() {
+    if (!webSerialSupported()) return []
+    try { return await navigator.serial.getPorts() } catch { return [] }
   }
 
   async connectPort(port) {
@@ -73,8 +92,14 @@ export class SerialTransport {
     this._buf = new Uint8Array(0)
   }
 
-  /** 读一次（length=0）或读到指定长度 */
-  async read(length = 0) {
+  /** 读一次（length=0）或读到指定长度；并发调用自动入队串行化 */
+  read(length = 0) {
+    const task = this._readQueue.then(() => this._readImpl(length))
+    this._readQueue = task.catch(() => { /* 队列不断链 */ })
+    return task
+  }
+
+  async _readImpl(length = 0) {
     if (!this.reader) throw new Error('串口未打开')
     if (!length) {
       if (this._buf.length) {
@@ -82,14 +107,19 @@ export class SerialTransport {
         this._buf = new Uint8Array(0)
         return out
       }
-      const { value, done } = await this.reader.read()
-      if (done) throw new Error('串口已关闭')
-      return value || new Uint8Array(0)
+      // 迟到回收数据（被遗弃读 promise 里救回来的字节）优先消费
+      const late = takeLate()
+      if (late && late.length) return late
+      return this._rawRead()
     }
     while (this._buf.length < length) {
-      const { value, done } = await this.reader.read()
-      if (done) throw new Error('串口已关闭')
-      if (value) this._buf = concat(this._buf, value)
+      const late = takeLate()
+      if (late && late.length) {
+        this._buf = concat(this._buf, late)
+        continue
+      }
+      const chunk = await this._rawRead()
+      this._buf = concat(this._buf, chunk)
     }
     const out = this._buf.slice(0, length)
     this._buf = this._buf.slice(length)

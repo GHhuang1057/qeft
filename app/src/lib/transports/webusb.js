@@ -8,6 +8,7 @@
  */
 import { usbClass } from '../qdl/usblib.js'
 import { VENDOR_IDS, PRODUCT_ID, QDL_CLASS_CODE } from '../qdl/constants.js'
+import { takeLate, hasLate } from '../late-buffer.js'
 
 export const EDL_FILTERS = VENDOR_IDS.map((vendorId) => ({
   vendorId,
@@ -18,6 +19,14 @@ export const EDL_FILTERS = VENDOR_IDS.map((vendorId) => ({
 /** 9008 设备是否可能已被系统驱动占用（Windows 常见：需要 WinUSB/libusbK 驱动） */
 export function webUsbSupported() {
   return typeof navigator !== 'undefined' && 'usb' in navigator
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((s, a) => s + a.length, 0)
+  const out = new Uint8Array(total)
+  let off = 0
+  for (const p of parts) { out.set(p, off); off += p.length }
+  return out
 }
 
 export class WebUsbTransport extends usbClass {
@@ -32,7 +41,30 @@ export class WebUsbTransport extends usbClass {
     const devices = await navigator.usb.getDevices()
     return devices
       .filter((d) => VENDOR_IDS.includes(d.vendorId) && d.productId === PRODUCT_ID)
-      .map(describe)
+      .map((d) => ({ ...describe(d), raw: d }))
+  }
+
+  /**
+   * QEFT patch：usbClass.read 之上的迟到数据回收。
+   * 遗弃读 promise 的结果会经 __qeftLateRebuffer 进入 late-buffer，这里优先消费。
+   */
+  async read(length = 0) {
+    if (!length && hasLate()) {
+      const late = takeLate()
+      if (late && late.length) return late
+    }
+    if (length && hasLate()) {
+      const parts = []
+      let got = 0
+      while (got < length && hasLate()) {
+        const l = takeLate()
+        parts.push(l)
+        got += l.length
+      }
+      if (got >= length) return concatBytes(parts)
+      if (got) return concatBytes([concatBytes(parts), await super.read(length - got)])
+    }
+    return super.read(length)
   }
 
   /** 弹出系统选择器让用户授权一台设备 */

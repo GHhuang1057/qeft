@@ -11,8 +11,12 @@ import { SerialTransport, webSerialSupported } from '../lib/transports/serial.js
 import { BridgeTransport } from '../lib/transports/bridge.js'
 import { bridge, BridgeClient } from '../lib/bridge.js'
 import { SimUsb } from '../lib/sim/device-sim.js'
+import { installLateRebuffer } from '../lib/late-buffer.js'
+
+installLateRebuffer()
 
 export const TRANSPORTS = [
+  { id: 'auto', label: '自动（推荐）', hint: '按可用性自动选择通道，静默优先' },
   { id: 'webusb', label: 'WebUSB', hint: '浏览器直连，需 WinUSB 驱动' },
   { id: 'bridge', label: '扩展 · 本机 libusb', hint: '经 QEFT 扩展调用系统 libusb' },
   { id: 'serial', label: 'Web Serial', hint: '设备以 COM 口形式暴露时' },
@@ -29,7 +33,7 @@ export function useQdl() {
   const activeLun = ref(0)
 
   const state = reactive({
-    transport: 'webusb',
+    transport: 'auto',
     status: '未连接',
     connected: false,
     mode: null,
@@ -155,62 +159,124 @@ export function useQdl() {
     })
   }
 
-  /* ---------------- 连接 ---------------- */
+  /* ---------------- 连接（自动通道选择） ---------------- */
+
+  /**
+   * 组装自动连接计划：静默通道优先，弹窗通道垫底。
+   * 哲学与 edl-ng 的 QUD/libusb 双通道一致：驱动是什么就走什么，不跟系统驱动对抗。
+   */
+  async function buildConnectPlan() {
+    const plan = []
+    if (state.bridge.available) plan.push({ kind: 'bridge', label: '扩展 · 本机 libusb' })
+    try {
+      const ports = await SerialTransport.listKnownPorts()
+      ports.forEach((port, i) => plan.push({ kind: 'serial', label: `Web Serial（已授权端口 ${i + 1}）`, port }))
+    } catch { /* ignore */ }
+    try {
+      const t = new WebUsbTransport()
+      for (const d of await t.listDevices()) {
+        plan.push({ kind: 'usb', label: `WebUSB（已授权 ${d.name}）`, device: d.raw })
+      }
+    } catch { /* ignore */ }
+    if (state.env.serial) plan.push({ kind: 'serial', label: 'Web Serial（弹窗选择）' })
+    if (state.env.webusb) plan.push({ kind: 'usb', label: 'WebUSB（弹窗选择）' })
+    return plan
+  }
+
+  async function openTransport(kind, step = {}) {
+    if (kind === 'bridge') { await transport.connect(state.portSerial || null); return }
+    if (kind === 'usb' && step.device) { await transport.connectDevice(step.device); return }
+    if (kind === 'serial' && step.port) { await transport.connectPort(step.port); return }
+    await transport.connect(state.portSerial || null)
+  }
+
+  /** 传输层打通后的 qdl 握手 + Configure（与通道无关） */
+  async function qdlHandshake() {
+    const device = new qdlDevice(state.programmer.buffer)
+    await withConsoleCapture(() => device.connect(transport))
+
+    state.connected = true
+    state.mode = device.mode
+    state.serial = device.sahara?.serial || ''
+    dev = device
+    log(`已进入 Firehose${state.serial ? ` · 序列号 ${state.serial}` : ''}`)
+
+    // qdl 内部 connect() 会用默认配置跑一次 configure；若用户改过配置则重新下发
+    const fh = device.firehose
+    const c = state.cfg
+    const needsReconfigure =
+      fh.cfg.MemoryName !== c.memoryName ||
+      Number(fh.cfg.SkipStorageInit) !== Number(c.skipStorageInit) ||
+      Number(fh.cfg.SECTOR_SIZE_IN_BYTES) !== Number(c.sectorSize) ||
+      Number(fh.cfg.maxlun) !== Number(c.maxlun) ||
+      Number(fh.cfg.ZLPAwareHost) !== Number(c.zlpAwareHost)
+    if (needsReconfigure) {
+      fh.cfg.MemoryName = c.memoryName
+      fh.cfg.SkipStorageInit = Number(c.skipStorageInit)
+      fh.cfg.SECTOR_SIZE_IN_BYTES = Number(c.sectorSize)
+      fh.cfg.maxlun = Number(c.maxlun)
+      fh.cfg.ZLPAwareHost = Number(c.zlpAwareHost)
+      log(`重新下发 Configure：MemoryName=${c.memoryName} 扇区=${c.sectorSize} LUN 数=${c.maxlun}`)
+      await withConsoleCapture(() => fh.configure())
+    }
+    return device
+  }
+
   async function connect() {
     if (!state.programmer) { log('请先选择 prog_firehose 引导镜像', 'error'); return false }
     busy.value = true
     state.status = '连接中…'
     state.lastError = ''
     setProgress(0, '准备连接')
-    try {
-      if (state.transport !== 'sim' || !transport) transport = createTransport(state.transport)
-      if (!transport.connected) await transport.connect(state.portSerial || null)
-      log(`传输通道就绪：${TRANSPORTS.find((t) => t.id === state.transport)?.label}`)
 
-      const device = new qdlDevice(state.programmer.buffer)
-      await withConsoleCapture(() => device.connect(transport))
-
-      state.connected = true
-      state.mode = device.mode
-      state.serial = device.sahara?.serial || ''
-      dev = device
-      log(`已进入 Firehose${state.serial ? ` · 序列号 ${state.serial}` : ''}`)
-
-      // qdl 内部 connect() 会用默认配置跑一次 configure；若用户改过配置则重新下发
-      const fh = device.firehose
-      const c = state.cfg
-      const needsReconfigure =
-        fh.cfg.MemoryName !== c.memoryName ||
-        Number(fh.cfg.SkipStorageInit) !== Number(c.skipStorageInit) ||
-        Number(fh.cfg.SECTOR_SIZE_IN_BYTES) !== Number(c.sectorSize) ||
-        Number(fh.cfg.maxlun) !== Number(c.maxlun) ||
-        Number(fh.cfg.ZLPAwareHost) !== Number(c.zlpAwareHost)
-      if (needsReconfigure) {
-        fh.cfg.MemoryName = c.memoryName
-        fh.cfg.SkipStorageInit = Number(c.skipStorageInit)
-        fh.cfg.SECTOR_SIZE_IN_BYTES = Number(c.sectorSize)
-        fh.cfg.maxlun = Number(c.maxlun)
-        fh.cfg.ZLPAwareHost = Number(c.zlpAwareHost)
-        log(`重新下发 Configure：MemoryName=${c.memoryName} 扇区=${c.sectorSize} LUN 数=${c.maxlun}`)
-        await withConsoleCapture(() => fh.configure())
-      }
-
-      state.status = '已连接'
-      setProgress(100, '已连接')
-      state.deviceInfo = transport.device ? {
-        vid: transport.device.vendorId,
-        pid: transport.device.productId,
-      } : null
-      log(`Firehose 就绪 · LUN 列表 ${fh.luns.join(',')}`)
-      return true
-    } catch (e) {
-      state.lastError = String(e.message || e)
-      log(`连接失败: ${e.message || e}`, 'error')
-      state.status = '连接失败'
-      return false
-    } finally {
+    // sim 是显式手动模式，不走自动计划
+    const auto = state.transport === 'auto'
+    let plan = auto ? await buildConnectPlan() : [{ kind: state.transport, label: TRANSPORTS.find((t) => t.id === state.transport)?.label || state.transport }]
+    if (!plan.length) {
+      log('没有可用通道：未发现桥接扩展 / 已授权端口 / 已授权设备，且浏览器缺少弹窗通道。检查驱动与扩展后再试', 'error')
+      state.status = '连接失败（无可用通道）'
       busy.value = false
+      return false
     }
+    log(`自动通道计划（${plan.length} 步）：${plan.map((p) => p.label).join(' → ')}`, 'debug')
+
+    let lastErr = null
+    for (let i = 0; i < plan.length; i++) {
+      const step = plan[i]
+      state.status = `连接中（${step.label}）…`
+      setProgress((i / plan.length) * 80, `尝试 ${step.label}`)
+      try {
+        transport = createTransport(step.kind === 'usb-prompt' || step.kind === 'serial-prompt' ? step.kind.replace('-prompt', '') : step.kind)
+        if (step.kind === 'sim') transport.armImageTransfer(state.programmer.buffer.byteLength)
+        await openTransport(step.kind, step)
+        log(`通道就绪：${step.label}`)
+        await qdlHandshake()
+        state.transport = step.kind.replace('-prompt', '')
+        state.status = '已连接'
+        setProgress(100, '已连接')
+        state.deviceInfo = transport.device ? { vid: transport.device.vendorId, pid: transport.device.productId } : null
+        log(`Firehose 就绪 · LUN 列表 ${dev.firehose.luns.join(',')}`)
+        busy.value = false
+        return true
+      } catch (e) {
+        lastErr = e
+        log(`[${step.label}] 失败: ${String(e.message || e).slice(0, 180)}`, 'warn')
+        try { await transport?.close?.() } catch { /* ignore */ }
+        transport = null
+        // 桥接不可达时本会话内跳过，避免反复撞同一堵墙
+        if (step.kind === 'bridge') state.bridge.available = false
+        if (auto) {
+          const rest = await buildConnectPlan()
+          plan = plan.slice(0, i + 1).concat(rest.filter((r) => !plan.slice(0, i + 1).some((p) => p.label === r.label)))
+        }
+      }
+    }
+
+    state.lastError = String(lastErr?.message || lastErr || '所有通道均失败')
+    log(`连接失败（已尝试所有通道）: ${state.lastError}`, 'error')
+    state.status = '连接失败'
+    busy.value = false
+    return false
   }
 
   async function disconnect() {
