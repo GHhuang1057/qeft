@@ -1,0 +1,11 @@
+{
+  "name": "qeft-host",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "QEFT Native Messaging Host —— node-usb(libusb) 后端",
+  "main": "qeft-host.mjs",
+  "dependencies": {
+    "usb": "^2.15.0"
+  }
+}

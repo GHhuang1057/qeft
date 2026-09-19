@@ -1,0 +1,20 @@
+# QEFT (QC EDL Flash Tool) — Cloudflare 静态站点部署配置
+#
+# 纯静态（Vite 产物），无需 Worker 代码；资源由 Workers Static Assets 直出。
+# 免费版额度：10 万请求/天，对刷机工具绰绰有余。
+#
+# flash.geekhonize.top 使用 Custom Domain（由 Wrangler 自动创建/接管 DNS 记录）。
+# 若该主机名下已有历史 DNS 记录导致部署报错，可改用 Zone Route：
+#   routes = [{ pattern = "flash.geekhonize.top/*", zone_name = "geekhonize.top" }]
+#   （并手动加一条指向该 Worker 的代理记录）
+
+name = "qeft"
+compatibility_date = "2026-09-01"
+
+[assets]
+directory = "./dist"
+not_found_handling = "none"
+
+[[routes]]
+pattern = "flash.geekhonize.top"
+custom_domain = true

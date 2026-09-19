@@ -1,0 +1,22 @@
+{
+  "name": "qeft",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QEFT (QC EDL Flash Tool) — 浏览器端高通 9008 EDL 刷机工具",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host",
+    "test": "node tests/qdl-sim.test.mjs"
+  },
+  "dependencies": {
+    "crc-32": "^1.2.2",
+    "fast-xml-parser": "^5.11.1",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.0",
+    "vite": "^6.0.0"
+  }
+}

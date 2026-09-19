@@ -1,0 +1,21 @@
+# 本地工作区（非仓库内容）
+.workbuddy/
+_ref/
+
+# CRX 签名私钥 —— 绝不入库！泄露后任何人都能发布与 ID 同源的扩展
+extension/key.pem
+
+# 构建产物 / 依赖
+node_modules/
+app/dist/
+*.log
+
+# 本机生成物（含本机绝对路径）
+host/run-host.cmd
+host/run-host.sh
+host/com.geekhonize.qeft_host.json
+
+# 临时
+.DS_Store
+Thumbs.db
+*.tmp
