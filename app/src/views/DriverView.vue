@@ -198,10 +198,12 @@ reg add "HKCU\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 1 /
           <dd>换 libusbK 重装；或重启浏览器 / 拔插设备；确认没有其它程序（QFIL、刷机匣等）占用设备。</dd>
           <dt>WebUSB 弹不出选择框</dt>
           <dd>必须 HTTPS 或 localhost；且同源下先授权过。本页为 <span class="qeft-kbd">{{ origin }}</span>。</dd>
-          <dt>想用串口模式</dt>
+          <dt>想用串口模式（推荐，免 Zadig）</dt>
           <dd>
-            保持高通 QDLoader 驱动，在「选择设备 / 引导 / 配置」里把传输通道切到
-            <b>Web Serial</b>（协议与 USB 相同，但速率受串口限制）。
+            设备管理器里显示 <span class="qeft-kbd">Qualcomm HS-USB QDLoader 9008 (COMx)</span> 时，
+            <b>不需要装 WinUSB</b>——直接把传输通道切到 <b>Web Serial</b> 连接 COM 口即可（协议与 USB
+            相同，速率受串口限制）。这正是 edl-ng 在 Windows 上的 QUD 通道设计：驱动是什么就用什么，
+            不与系统驱动对抗。
           </dd>
           <dt>Linux / macOS</dt>
           <dd>

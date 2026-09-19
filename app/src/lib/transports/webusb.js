@@ -84,7 +84,7 @@ export class WebUsbTransport extends usbClass {
       if (/NotFound/i.test(msg)) {
         throw new Error('设备接口打开失败：上一次会话可能仍占用接口。请完全退出浏览器后重开再试。')
       }
-      throw new Error(`打开 USB 设备失败（${msg}）。常见原因：1) 驱动被换回 QDLoader 串口 → 用 Zadig 重装 WinUSB；2) 旧会话未释放 → 重启浏览器；3) 设备已离开 9008 → 重进 EDL`, { cause: error })
+      throw new Error(`打开 USB 设备失败（${msg}）。三条路任选：1) 驱动被换回 QDLoader 串口 → 用 Zadig 重装 WinUSB；2) 旧会话未释放 → 重启浏览器；3) 不想折腾驱动 → 把传输通道切到「Web Serial」直接用 QDLoader 的 COM 口（参考 edl-ng 的 QUD 通道设计）`, { cause: error })
     }
   }
 
