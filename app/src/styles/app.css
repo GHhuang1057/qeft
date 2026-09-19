@@ -166,12 +166,9 @@ body {
   line-height: 1.35;
 }
 
-/* ---------- 工作区（表格 + 右侧操作栏） ---------- */
+/* ---------- 工作区（单栏主流程） ---------- */
 .qeft-work {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: var(--gh-s5);
-  align-items: start;
+  min-width: 0;
 }
 
 .qeft-work__main {
@@ -180,6 +177,12 @@ body {
 
 .qeft-search {
   width: 200px;
+}
+
+.qeft-progfile {
+  flex: 0 1 340px;
+  min-width: 200px;
+  width: auto;
 }
 
 .qeft-tablebox {
@@ -210,78 +213,6 @@ body {
 .qeft-part__num {
   font-variant-numeric: tabular-nums;
   color: var(--gh-fg-muted);
-}
-
-/* ---------- 右侧操作栏 ---------- */
-.qeft-rail {
-  position: sticky;
-  top: calc(var(--gh-header-h) + var(--gh-s4));
-  border: 1px solid var(--gh-border);
-  border-radius: var(--gh-r-md);
-  background: var(--gh-bg-elev);
-  box-shadow: var(--gh-shadow-2);
-  padding: var(--gh-s3);
-}
-
-.qeft-rail__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: var(--gh-fs-14);
-  font-weight: var(--gh-fw-semibold);
-  padding: var(--gh-s2) var(--gh-s2);
-  cursor: pointer;
-  user-select: none;
-  border-radius: var(--gh-r-sm);
-}
-
-.qeft-rail__head:hover {
-  background: var(--gh-bg-hover);
-}
-
-.qeft-rail__chev {
-  color: var(--gh-fg-muted);
-}
-
-.qeft-rail__body {
-  display: grid;
-  gap: var(--gh-s2);
-  padding: var(--gh-s1) 0 var(--gh-s2);
-}
-
-.qeft-rail__btn {
-  display: block;
-  width: 100%;
-  min-height: var(--gh-control-h);
-  padding: 0 var(--gh-s4);
-  font-family: inherit;
-  font-size: var(--gh-fs-14);
-  font-weight: var(--gh-fw-semibold);
-  color: var(--gh-accent);
-  background: var(--gh-bg-sunken);
-  border: 1px solid var(--gh-border);
-  border-radius: var(--gh-r-sm);
-  cursor: pointer;
-  transition: background var(--gh-dur-fast) var(--gh-ease), border-color var(--gh-dur-fast) var(--gh-ease);
-}
-
-.qeft-rail__btn:hover {
-  background: var(--gh-accent-subtle);
-  border-color: var(--gh-accent);
-}
-
-.qeft-rail__btn[aria-disabled='true'] {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-.qeft-rail__btn--danger {
-  color: var(--gh-danger);
-}
-
-.qeft-rail__btn--danger:hover {
-  background: var(--gh-danger-bg);
-  border-color: var(--gh-danger);
 }
 
 /* ---------- 状态 ---------- */
@@ -520,10 +451,6 @@ body {
     grid-template-columns: 208px minmax(0, 1fr);
     gap: var(--gh-s5);
   }
-
-  .qeft-work {
-    grid-template-columns: minmax(0, 1fr) 248px;
-  }
 }
 
 /* 小屏：侧栏转横向导航，操作栏落到表格下方 */
@@ -571,30 +498,35 @@ body {
   .qeft-side__cards {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
-
-  .qeft-work {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .qeft-rail {
-    position: static;
-  }
-
-  .qeft-rail__body {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  }
 }
 
 /* 手机：控件占满宽度，日志抽屉限高 */
 @media (max-width: 640px) {
+  .qeft-progfile {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
   .qeft-toolbar__row > .gh-btn,
   .qeft-toolbar__row > .qeft-filebtn {
     flex: 1 1 auto;
   }
 
-  .qeft-toolbar__port,
   .qeft-search {
     width: 100%;
+  }
+
+  /* 主操作行铺满 */
+  .qeft-toolbar__row > .gh-btn--primary,
+  .qeft-toolbar__row > .gh-btn--ghost-danger {
+    flex: 1 1 100%;
+  }
+
+  .qeft-menu__body {
+    position: fixed;
+    right: var(--gh-s3);
+    left: var(--gh-s3);
+    min-width: 0;
   }
 
   .qeft-tablebox {
