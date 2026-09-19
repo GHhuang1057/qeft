@@ -184,6 +184,22 @@ reg add "HKCU\Software\Policies\Microsoft\Edge\ExtensionInstallForcelist" /v 1 /
             </ul>
           </div>
         </div>
+
+        <div class="gh-alert gh-alert--danger gh-mt4">
+          <div class="gh-alert__body">
+            <div class="gh-alert__title">驱动「回跳」根治（重要）</div>
+            <div>
+              每次重进 EDL 时 Windows 可能又把 QDLoader 绑回去（表现为连接报「打开 USB 设备失败」，
+              但自检显示已授权=1）。根治：把 QDLoader 从驱动库删除，让系统只剩 WinUSB 可选。
+              <b>管理员</b> PowerShell 执行：
+              <pre class="gh-codeblock gh-mt2">pnputil /enum-drivers          # 找到 qdloader /高通 9008 相关的 oemXX.inf
+pnputil /delete-driver oemXX.inf /uninstall</pre>
+              然后重进 EDL → 设备管理器里 9008 应无 COM 口 → 重启浏览器 → 连接。
+              <b>代价</b>：QFIL 等串口工具不再可用（要用时重装 QDLoader 驱动即可）。
+              串口通道（Web Serial）只是备用路线：带宽低且驱动会吞 HELLO，稳定刷机请用 WinUSB。
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
