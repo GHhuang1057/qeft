@@ -19,3 +19,6 @@ host/com.geekhonize.qeft_host.json
 .DS_Store
 Thumbs.db
 *.tmp
+
+# 宣传物料（独立项目，含构建产物与浏览器缓存）
+promo/

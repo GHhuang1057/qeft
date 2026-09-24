@@ -69,14 +69,17 @@
                 <p><b>QEFT（QC EDL Flash Tool）</b>是浏览器端的高通 9008 (EDL) 刷机工具。</p>
                 <p>
                   协议栈基于 <span class="qeft-kbd">@andiradulescu/qdl</span>（MIT，已内嵌），
-                  传输层支持 WebUSB 直连、QEFT Bridge 扩展调用本机 libusb、Web Serial 三种通道，
-                  另有内置模拟设备可用于无真机演示。
+                  连接只走 <b>WebUSB + WinUSB 驱动</b>一条路：点连接后优先复用已授权的 9008 设备，
+                  未授权时弹出设备选择框，没有其它通道可选。
                 </p>
                 <p>
                   代码仅复用协议逻辑、非高通官方 release；本工具与 GeekHonize 均不对刷机后果负责，
                   请自行承担风险。
                 </p>
-                <p class="qeft-muted">版本 0.1.0 · <span class="gh-mono">flash.geekhonize.top</span></p>
+                <p class="qeft-muted">
+                  版本 0.1.0 · 构建 <span class="gh-mono">{{ buildStamp }}</span> ·
+                  <span class="gh-mono">flash.geekhonize.top</span>
+                </p>
               </div>
             </section>
           </template>
@@ -89,6 +92,7 @@
 </template>
 
 <script setup>
+/* global __QEFT_BUILD__ */
 import { computed, onMounted, ref, watch } from 'vue'
 import AppHeader from './components/AppHeader.vue'
 import ConfigCard from './components/ConfigCard.vue'
@@ -138,6 +142,8 @@ const storageText = computed(() => {
   if (!s) return '—'
   return `${s.prod_name || s.memory_type || '?'}${s.memory_type ? ' · ' + s.memory_type : ''}`
 })
+
+const buildStamp = __QEFT_BUILD__
 
 onMounted(() => {
   syncHash(active.value)

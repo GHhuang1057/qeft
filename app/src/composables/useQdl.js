@@ -141,10 +141,10 @@ export function useQdl() {
     try {
       const t = new WebUsbTransport()
       for (const d of await t.listDevices()) {
-        plan.push({ kind: 'webusb', label: `WebUSB（已授权 ${d.name}）`, device: d.raw })
+        plan.push({ kind: 'webusb', label: `已授权设备（${d.name}）`, device: d.raw })
       }
     } catch { /* ignore */ }
-    if (state.env.webusb) plan.push({ kind: 'webusb', label: 'WebUSB（弹窗选择）' })
+    if (state.env.webusb) plan.push({ kind: 'webusb', label: '设备选择框授权' })
     return plan
   }
 
@@ -196,12 +196,12 @@ export function useQdl() {
     const auto = state.transport === 'auto'
     let plan = auto ? await buildConnectPlan() : [{ kind: state.transport, label: TRANSPORTS.find((t) => t.id === state.transport)?.label || state.transport }]
     if (!plan.length) {
-      log('没有可用通道：未发现桥接扩展 / 已授权端口 / 已授权设备，且浏览器缺少弹窗通道。检查驱动与扩展后再试', 'error')
-      state.status = '连接失败（无可用通道）'
+      log('当前浏览器不支持 WebUSB，请改用 Chrome / Edge 等 Chromium 内核浏览器', 'error')
+      state.status = '连接失败（浏览器不支持 WebUSB）'
       busy.value = false
       return false
     }
-    log(`自动通道计划（${plan.length} 步）：${plan.map((p) => p.label).join(' → ')}`, 'debug')
+    log(`连接方式：${plan.map((p) => p.label).join(' → ')}（WebUSB / WinUSB）`, 'debug')
 
     let lastErr = null
     for (let i = 0; i < plan.length; i++) {
